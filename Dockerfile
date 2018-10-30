@@ -1,26 +1,19 @@
 FROM alpine:3.7
 
-ENV MYSQL_ROOT_PASSWORD root
-
 # Install mariadb and other packages
-RUN apk add --no-cache mariadb mariadb-client bash tzdata shadow
-# Remove the installed version as we need to set up our own from scratch
+RUN apk --update add mariadb mariadb-client pwgen bash && \
+    rm -f /var/cache/apk/*
 
-RUN rm -rf /var/lib/mysql/* /etc/mysql
-RUN mkdir -p /var/lib/mysql && chmod 777 /var/lib/mysql
+RUN rm /etc/mysql/my.cnf
+ADD ./files/my.cnf /etc/mysql/my.cnf
 
-ADD files /
+RUN mkdir -p /etc/mysql/conf.d
 
-RUN chmod ugo+x /healthcheck.sh
-
-# Security-sensitive changes: Make sure our start script can do what is needed
-# But make sure these are right
-RUN chmod ugo+wx /mnt /var/tmp
-RUN chmod -R ugo+wx /var/log /var/tmp/mysqlbase /etc/mysql/conf.d
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ADD files/run.sh /scripts/run.sh
+RUN mkdir /scripts/pre-exec.d && \
+    mkdir /scripts/pre-init.d && \
+    chmod -R 755 /scripts
 
 EXPOSE 3306
-# The following line overrides any cmd entry
-CMD []
-HEALTHCHECK --interval=2s --retries=30 CMD ["/healthcheck.sh"]
+
+ENTRYPOINT ["/scripts/run.sh"]
