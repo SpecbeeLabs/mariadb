@@ -1,19 +1,27 @@
-FROM alpine:3.7
+FROM alpine:latest
 
-# Install mariadb and other packages
-RUN apk --update add mariadb mariadb-client pwgen bash && \
-    rm -f /var/cache/apk/*
+ENV LC_ALL=en_GB.UTF-8
 
-RUN rm /etc/mysql/my.cnf
-ADD ./files/my.cnf /etc/mysql/my.cnf
+RUN mkdir /docker-entrypoint-initdb.d && \
+    apk add --no-cache mariadb mariadb-client && \
+    apk add --no-cache tzdata bash&& \
+    rm -rf /var/cache/apk/*
 
-RUN mkdir -p /etc/mysql/conf.d
+# comment out a few problematic configuration values
+RUN sed -Ei 's/^(bind-address|log)/#&/' /etc/mysql/my.cnf && \
+    # don't reverse lookup hostnames, they are usually another container
+    sed -i '/^\[mysqld]$/a skip-host-cache\nskip-name-resolve' /etc/mysql/my.cnf && \
+    # always run as user mysql
+    sed -i '/^\[mysqld]$/a user=mysql' /etc/mysql/my.cnf && \
+    # allow custom configurations
+    echo -e '\n!includedir /etc/mysql/conf.d/' >> /etc/mysql/my.cnf && \
+    mkdir -p /etc/mysql/conf.d/
 
-ADD files/run.sh /scripts/run.sh
-RUN mkdir /scripts/pre-exec.d && \
-    mkdir /scripts/pre-init.d && \
-    chmod -R 755 /scripts
+VOLUME /var/lib/mysql
+
+COPY docker-entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 3306
-
-ENTRYPOINT ["/scripts/run.sh"]
+# Default arguments passed to ENTRYPOINT if no arguments are passed when starting container
+CMD ["mysqld_safe"]
